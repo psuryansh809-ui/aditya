@@ -1,4 +1,4 @@
-# main.py - Swordigo-themed Streamlit ATM Dashboard (no auto-logout)
+# main.py - Swordigo-themed Streamlit ATM Dashboard (one action per login)
 
 import streamlit as st
 from storage import load_accounts, load_cash, load_reports, save_accounts, accounts
@@ -20,6 +20,8 @@ if "logged_in_user" not in st.session_state:
     st.session_state["logged_in_user"] = None
 if "action_selected" not in st.session_state:
     st.session_state["action_selected"] = None
+if "action_done" not in st.session_state:
+    st.session_state["action_done"] = None
 if "admin_logged_in" not in st.session_state:
     st.session_state["admin_logged_in"] = False
 
@@ -53,7 +55,7 @@ body {
 # SIDEBAR NAVIGATION
 # ----------------------------
 st.title("⚔️ Swordigo ATM Dashboard")
-st.write("Welcome — use the sidebar to navigate. Users can perform multiple actions after login; click Logout to end session.")
+st.write("Welcome — use the sidebar to navigate. Users can perform **one action per login**; click Logout to end session.")
 
 side = st.sidebar
 page = side.radio("Menu", ["Home", "Login", "Register", "Admin", "Reports"])
@@ -85,18 +87,21 @@ elif page == "Register":
             st.success(f"✅ Account {acc_no} created for {name}.")
 
 # ----------------------------
-# USER LOGIN PAGE (multiple actions per login)
+# USER LOGIN PAGE (one action per login)
 # ----------------------------
 elif page == "Login":
     st.header("🔐 User Login")
 
-    # If already logged in, show who and Logout button
+    # Show logout / info if already logged in
     if st.session_state["logged_in_user"]:
         acc = st.session_state["logged_in_user"]
         st.success(f"Logged in as: {accounts[acc]['name']} (Account: {acc})")
+        if st.session_state.get("action_done") is None:
+            st.info("You can perform **one action** only per login.")
         if st.button("Logout"):
             st.session_state["logged_in_user"] = None
             st.session_state["action_selected"] = None
+            st.session_state["action_done"] = None
             st.info("You have been logged out.")
     else:
         acc_no = st.text_input("Account Number", key="login_acc")
@@ -108,12 +113,13 @@ elif page == "Login":
                 else:
                     st.session_state["logged_in_user"] = acc_no
                     st.session_state["action_selected"] = None
-                    st.success(f"✅ Welcome {accounts[acc_no]['name']} — you can perform actions now.")
+                    st.session_state["action_done"] = None
+                    st.success(f"✅ Welcome {accounts[acc_no]['name']} — choose **one action** below.")
             else:
                 st.error("❌ Invalid credentials.")
 
-    # Actions (visible only when logged in)
-    if st.session_state["logged_in_user"]:
+    # Actions (only if user is logged in and hasn't done an action)
+    if st.session_state["logged_in_user"] and st.session_state.get("action_done") is None:
         c1, c2, c3, c4 = st.columns(4)
 
         # Withdraw
@@ -123,10 +129,10 @@ elif page == "Login":
         if st.session_state["action_selected"] == "withdraw":
             amt = st.number_input("Amount to withdraw", min_value=0, step=100, key="withdraw_amt")
             if st.button("Confirm Withdraw", key="confirm_withdraw"):
-                res = withdraw(st.session_state["logged_in_user"], int(amt))
+                res = withdraw(acc, int(amt))
                 st.info(res)
-                st.success("You may perform another action or logout.")
-                st.session_state["action_selected"] = None
+                st.session_state["action_done"] = True
+                st.success("Action complete. Please logout to perform another action.")
 
         # Deposit
         with c2:
@@ -135,18 +141,18 @@ elif page == "Login":
         if st.session_state["action_selected"] == "deposit":
             damt = st.number_input("Amount to deposit", min_value=0.0, step=100.0, key="deposit_amt")
             if st.button("Confirm Deposit", key="confirm_deposit"):
-                res = deposit(st.session_state["logged_in_user"], float(damt))
+                res = deposit(acc, float(damt))
                 st.info(res)
-                st.success("You may perform another action or logout.")
-                st.session_state["action_selected"] = None
+                st.session_state["action_done"] = True
+                st.success("Action complete. Please logout to perform another action.")
 
-        # Balance
+        # Check Balance
         with c3:
             if st.button("📄 Check Balance", key="btn_balance"):
-                res = current_balance(st.session_state["logged_in_user"])
+                res = current_balance(acc)
                 st.info(res)
-                st.success("You may perform another action or logout.")
-                st.session_state["action_selected"] = None
+                st.session_state["action_done"] = True
+                st.success("Action complete. Please logout to perform another action.")
 
         # Transfer
         with c4:
@@ -156,10 +162,10 @@ elif page == "Login":
             recv = st.text_input("Receiver Account No.", key="transfer_recv")
             tamt = st.number_input("Amount", min_value=0.0, step=100.0, key="transfer_amt")
             if st.button("Confirm Transfer", key="confirm_transfer"):
-                res = transfer_funds(st.session_state["logged_in_user"], recv, float(tamt))
+                res = transfer_funds(acc, recv, float(tamt))
                 st.info(res)
-                st.success("You may perform another action or logout.")
-                st.session_state["action_selected"] = None
+                st.session_state["action_done"] = True
+                st.success("Action complete. Please logout to perform another action.")
 
 # ----------------------------
 # ADMIN PANEL
